@@ -3,3 +3,6 @@ title: "Welcome"
 ---
 
 Hello, RStudio!
+=======
+Hello, Github!
+>>>>>>> 8d05452efde47ff41f5884b22e91d8ebc36aea49
