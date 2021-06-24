@@ -1,0 +1,224 @@
+---
+title: "manipulate"
+author: "Marina Botelho"
+date: "24/06/2021"
+output: html_document
+---
+
+## Read online table
+
+### Download table (.csv)
+
+```{r}
+# set variables
+csv_url  <- "https://oceanview.pfeg.noaa.gov/erddap/tabledap/cciea_AC.csv"
+dir_data <- "data"
+
+# derived variables
+csv <- file.path(dir_data, basename(csv_url))
+
+# create directory
+dir.create(dir_data)
+
+# download file
+download.file(csv_url, csv)
+
+```
+
+### Read table 'read.csv()'
+
+```{r}
+# attempt to read csv
+d <- read.csv(csv)
+
+# show the data frame
+d
+```
+
+```{r}
+# read csv by skipping first two lines, so no header
+d <- read.csv(csv, skip = 2, header = FALSE)
+d
+
+# update data frame to original column names
+names(d) <- names(read.csv(csv))
+d
+```
+
+### Show table `DT::datatable()`
+
+```{r}
+# show table (first way)
+DT::datatable(d)
+
+#show table (second way):
+library(DT)
+datatable(d)
+
+# the difference between the two methods is that in the second one we load the library and use the function without the explicit R package referencing
+
+```
+
+## Wrangle data
+
+### Manipulate with `dplyr`
+
+```{r}
+library(DT)
+library(dplyr)
+
+d <- d %>% 
+  # tibble: provides a more useful summary in the default output of the R Console to include only the first 10 rows of data and the data types for each column
+  tibble() %>% 
+  # mutate time: transform time to an actual date column
+  mutate(
+    time = as.Date(substr(time, 1, 10))) %>% 
+  # select columns
+  select(
+    time, 
+    starts_with("total_fisheries_revenue")) %>% 
+  # filter rows
+  filter(
+    time >= as.Date("1981-01-01"))
+
+datatable(d)
+```
+
+### Tidy with `tidyr`
+
+```{r}
+library(tidyr)
+
+d <- d %>% 
+  pivot_longer(-time)
+
+datatable(d)
+
+```
+
+### Summarize with `dplyr`
+
+```{r}
+library(stringr)
+
+d <- d %>% 
+  mutate(
+    region = str_replace(name, "total_fisheries_revenue_", "")) %>% 
+  select(time, region, value)
+datatable(d)
+
+d_sum <- d %>% 
+  group_by(region) %>%  
+  summarize(avg_revenue = mean(value))
+
+datatable(d_sum) %>% 
+  formatCurrency("avg_revenue")
+
+```
+
+### Apply functions with `purrr` on a `nest`'ed `tibble`
+
+```{r}
+library(purrr) 
+#The purrr R package provides functions to operate on list objects, in this case the nested data. and application of functions on these data with purrr’s map function. We can feed the data object into an anonymous function where we fit the linear model lm() and return a list object. To then extract the coefficient from the model coef(summary()), we want to return a type of double (not another list object), so we use the map_dbl() function.
+
+
+n <- d %>% 
+  group_by(region) %>% 
+  nest(
+    data = c(time, value))
+n
+
+n <- n %>% 
+  mutate(
+    lm = map(data, function(d){
+      lm(value ~ time, d) } ),
+    trend = map_dbl(lm, function(m){
+      coef(summary(m))["time","Estimate"] }))
+n
+n %>% 
+  select(region, trend) %>% 
+  datatable()
+
+```
+
+### Another example
+#### Reading data
+```{r}
+ex1 <- read.csv(csv, skip = 2, header = FALSE)
+# update data frame to original column names
+names(ex1) <- names(read.csv(csv))
+ex1
+```
+
+#### Manipulation
+```{r}
+ex1 <- ex1 %>% 
+  # tibble
+  tibble() %>% 
+  # mutate time
+  mutate(
+    time = as.Date(substr(time, 1, 10))) %>% 
+  # select columns
+  select(
+    time, 
+    starts_with("recreational_landings")) %>% 
+  # filter rows
+  filter(
+    time >= as.Date("2005-01-01"))
+
+datatable(ex1)
+```
+
+#### Tidy with tidyr
+```{r}
+library(tidyr)
+ex1 <- ex1 %>% 
+  pivot_longer(-time)
+datatable(ex1)
+```
+
+#### Summarize
+```{r}
+library(stringr)
+
+ex1_region <- ex1 %>% 
+  mutate(
+    region = str_replace(name, "recreational_landings_", ""))  %>% #select the name of the region
+  select(time, region, value)
+datatable(ex1_region)
+
+ex1_sum <- ex1_region %>% 
+  group_by(region) %>% 
+  summarize(
+    avg_recreational_landings = mean(value))
+ex1_sum
+datatable(ex1_sum)
+
+
+```
+
+#### Apply function
+```{r}
+library(purrr)
+
+ex1_n <- ex1_region %>% 
+  group_by(region) %>% 
+  nest(
+    data = c(time, value))
+ex1_n
+
+ex1_nn <- ex1_n %>% 
+  mutate(
+    lm    = map(data, function(d){
+      lm(value ~ time, d) } ),
+    trend = map_dbl(lm, function(m){
+      coef(summary(m))["time","Estimate"] }))
+ex1_nn
+ex1_nn %>% 
+  select(region, trend) %>% 
+  datatable()
+
+```
+
+
